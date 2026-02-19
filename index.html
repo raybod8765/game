@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>WeltraumSpielUltraMega</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+html,body{
+margin:0;
+padding:0;
+width:100%;
+height:100%;
+overflow:hidden;
+background:black;
+font-family:Arial,Helvetica,sans-serif;
+}
+canvas{
+display:block;
+image-rendering:pixelated;
+}
+button{
+border:none;
+background:linear-gradient(90deg,#2040ff,#b020ff);
+color:white;
+font-size:20px;
+padding:16px 22px;
+border-radius:12px;
+cursor:pointer;
+transition:transform 0.2s;
+}
+button:hover{
+transform:scale(1.1);
+}
+#benutzeroberflaeche{
+position:absolute;
+top:10px;
+left:10px;
+color:#00ffcc;
+font-size:18px;
+z-index:10;
+}
+#tasten{
+position:absolute;
+bottom:20px;
+left:20px;
+display:flex;
+gap:10px;
+z-index:20;
+}
+#feuerContainer{
+position:absolute;
+bottom:20px;
+right:20px;
+z-index:20;
+}
+#joystickBasis{
+position:absolute;
+bottom:120px;
+left:20px;
+width:150px;
+height:150px;
+background:rgba(255,255,255,0.15);
+border-radius:50%;
+z-index:20;
+}
+#joystickKnopf{
+position:absolute;
+left:45px;
+top:45px;
+width:60px;
+height:60px;
+background:rgba(255,255,255,0.75);
+border-radius:50%;
+}
+</style>
+</head>
+<body>
+<canvas id="spielfeld"></canvas>
+<div id="benutzeroberflaeche">Laden...</div>
+<div id="tasten">
+<button id="linksKnopf">◀</button>
+<button id="rechtsKnopf">▶</button>
+</div>
+<div id="feuerContainer">
+<button id="feuerKnopf">FEUER</button>
+</div>
+<div id="joystickBasis">
+<div id="joystickKnopf"></div>
+</div>
+<script>
+const spielfeld=document.getElementById("spielfeld");
+const kontext=spielfeld.getContext("2d");
+kontext.imageSmoothingEnabled=false;
+function anpassen(){
+spielfeld.width=window.innerWidth;
+spielfeld.height=window.innerHeight;
+}
+window.addEventListener("resize",anpassen);
+anpassen();
+const steuerung={links:false,rechts:false,feuern:false};
+const spieler={x:window.innerWidth/2,y:window.innerHeight-80,breite:60,hoehe:60,geschwindigkeit:6,leben:100};
+const kugeln=[];
+const gegnerKugeln=[];
+const gegner=[];
+const coins=[];
+const punkte={score:0,highscore:0,xp:0};
+let partikelEffekte=[];
+const bilder={
+spieler:"bilder/spieler.png",
+kugelSpieler:"bilder/bullet-spieler.png",
+kugelGegner:"bilder/bullet-gegner.png",
+gegner1:"bilder/gegner1.png",
+gegner2:"bilder/gegner2.png",
+bgMitte:"bilder/hintergrundmitte.png",
+bgLinks:"bilder/hintergrundlinks.png",
+bgRechts:"bilder/hintergrundrechts.png",
+coinXP:"bilder/muenze-xp.png",
+coinLeben:"bilder/muenze-leben.png"
+};
+const geladen={};
+let total=Object.keys(bilder).length;
+let geladenCount=0;
+for(const key in bilder){
+geladen[key]=new Image();
+geladen[key].src=bilder[key];
+geladen[key].onload=()=>geladenCount++;
+}
+const sounds={
+schuss:new Audio("sounds/shoot.mp3"),
+explosion:new Audio("sounds/explosion.mp3")
+};
+function schiessen(){
+kugeln.push({x:spieler.x,y:spieler.y,geschwindigkeit:12});
+sounds.schuss.currentTime=0;
+sounds.schuss.play();
+}
+window.addEventListener("keydown",e=>{
+if(e.key==="a"||e.key==="ArrowLeft")steuerung.links=true;
+if(e.key==="d"||e.key==="ArrowRight")steuerung.rechts=true;
+if(e.key===" ")schiessen();
+});
+window.addEventListener("keyup",e=>{
+if(e.key==="a"||e.key==="ArrowLeft")steuerung.links=false;
+if(e.key==="d"||e.key==="ArrowRight")steuerung.rechts=false;
+});
+spielfeld.addEventListener("mousedown",schiessen);
+document.getElementById("linksKnopf").ontouchstart=e=>{e.preventDefault();steuerung.links=true;}
+document.getElementById("linksKnopf").ontouchend=()=>steuerung.links=false;
+document.getElementById("rechtsKnopf").ontouchstart=e=>{e.preventDefault();steuerung.rechts=true;}
+document.getElementById("rechtsKnopf").ontouchend=()=>steuerung.rechts=false;
+document.getElementById("feuerKnopf").ontouchstart=e=>{e.preventDefault();schiessen();}
+let joystickAktiv=false;
+let joystickStartX=0;
+const joystickBasis=document.getElementById("joystickBasis");
+const joystickKnopf=document.getElementById("joystickKnopf");
+joystickBasis.addEventListener("touchstart",e=>{
+joystickAktiv=true;
+joystickStartX=e.touches[0].clientX;
+});
+joystickBasis.addEventListener("touchmove",e=>{
+if(!joystickAktiv)return;
+const dx=e.touches[0].clientX-joystickStartX;
+const begrenzt=Math.max(-40,Math.min(40,dx));
+joystickKnopf.style.left=(45+begrenzt)+"px";
+steuerung.links=begrenzt<-15;
+steuerung.rechts=begrenzt>15;
+});
+joystickBasis.addEventListener("touchend",()=>{
+joystickAktiv=false;
+joystickKnopf.style.left="45px";
+steuerung.links=false;
+steuerung.rechts=false;
+});
+function spawnGegner(){
+if(gegner.length>0)return;
+for(let i=0;i<15;i++){
+let gBild=Math.random()<0.5?geladen.gegner1:geladen.gegner2;
+gegner.push({x:Math.random()*spielfeld.width,y:50+i*50,img:gBild});
+}
+}
+function spawnCoins(x,y){coins.push({x:x,y:y,typ:Math.random()<0.5?"xp":"leben",t:0});}
+function spawnExplosion(x,y){for(let i=0;i<15;i++){partikelEffekte.push({x:x,y:y,dx:(Math.random()-0.5)*4,dy:(Math.random()-0.5)*4,farbe:"orange",radius:Math.random()*4+2,leben:1});}}
+function aktualisieren(){
+if(steuerung.links)spieler.x-=spieler.geschwindigkeit;
+if(steuerung.rechts)spieler.x+=spieler.geschwindigkeit;
+if(spieler.x<spieler.breite/2)spieler.x=spieler.breite/2;
+if(spieler.x>spielfeld.width-spieler.breite/2)spieler.x=spielfeld.width-spieler.breite/2;
+for(let i=kugeln.length-1;i>=0;i--){kugeln[i].y-=kugeln[i].geschwindigkeit;if(kugeln[i].y<-20)kugeln.splice(i,1);}
+for(let i=gegnerKugeln.length-1;i>=0;i--){gegnerKugeln[i].y+=4;if(gegnerKugeln[i].y>spielfeld.height+20)gegnerKugeln.splice(i,1);if(Math.abs(gegnerKugeln[i].x-spieler.x)<30&&Math.abs(gegnerKugeln[i].y-spieler.y)<30){gegnerKugeln.splice(i,1);spieler.leben-=20;spawnExplosion(spieler.x,spieler.y);sounds.explosion.currentTime=0;sounds.explosion.play();}}
+for(let i=gegner.length-1;i>=0;i--){let g=gegner[i];if(Math.random()<0.01)gegnerKugeln.push({x:g.x,y:g.y,geschwindigkeit:4});for(let j=kugeln.length-1;j>=0;j--){if(Math.abs(kugeln[j].x-g.x)<30&&Math.abs(kugeln[j].y-g.y)<30){spawnCoins(g.x,g.y);spawnExplosion(g.x,g.y);gegner.splice(i,1);kugeln.splice(j,1);punkte.score+=10;punkte.xp+=5;sounds.explosion.currentTime=0;sounds.explosion.play();}}}
+for(let i=coins.length-1;i>=0;i--){let c=coins[i];c.t+=0.016;c.x+=(spieler.x-c.x)*0.08;c.y+=(spieler.y-c.y)*0.08;if(Math.abs(c.x-spieler.x)<20){if(c.typ==="xp")punkte.xp+=5;else spieler.leben=Math.min(100,spieler.leben+10);coins.splice(i,1);}}
+for(let i=partikelEffekte.length-1;i>=0;i--){let p=partikelEffekte[i];p.x+=p.dx;p.y+=p.dy;p.leben-=0.02;if(p.leben<=0)partikelEffekte.splice(i,1);}
+spawnGegner();
+}
+function zeichnen(){
+kontext.fillStyle="black";
+kontext.fillRect(0,0,spielfeld.width,spielfeld.height);
+if(geladenCount===total){
+let ratio=spielfeld.width/spielfeld.height;
+let img=geladen.bgMitte;
+let iw=img.width;
+let ih=img.height;
+let cropW=iw;
+let cropH=ih;
+let cropX=0;
+let cropY=0;
+if(iw/ih>ratio){cropW=ih*ratio;cropX=(iw-cropW)/2;}else{cropH=iw/ratio;cropY=(ih-cropH)/2;}
+kontext.drawImage(img,cropX,cropY,cropW,cropH,0,0,spielfeld.width,spielfeld.height);
+kontext.drawImage(geladen.bgLinks,0,0,spielfeld.height*(geladen.bgLinks.width/geladen.bgLinks.height),spielfeld.height);
+kontext.drawImage(geladen.bgRechts,spielfeld.width-spielfeld.height*(geladen.bgRechts.width/geladen.bgRechts.height),0,spielfeld.height*(geladen.bgRechts.width/geladen.bgRechts.height),spielfeld.height);
+}
+kontext.drawImage(geladen.spieler,spieler.x-spieler.breite/2,spieler.y-spieler.hoehe/2,spieler.breite,spieler.hoehe);
+kugeln.forEach(k=>kontext.drawImage(geladen.kugelSpieler,k.x-4,k.y-10,8,20));
+gegner.forEach(g=>kontext.drawImage(g.img,g.x-30,g.y-30,60,60));
+gegnerKugeln.forEach(gk=>kontext.drawImage(geladen.kugelGegner,gk.x-4,gk.y-10,8,20));
+coins.forEach(c=>kontext.drawImage(c.typ==="xp"?geladen.coinXP:geladen.coinLeben,c.x-16,c.y-16,32,32));
+partikelEffekte.forEach(p=>{kontext.beginPath();kontext.arc(p.x,p.y,p.radius,0,Math.PI*2);kontext.fillStyle=p.farbe;kontext.globalAlpha=p.leben;kontext.fill();kontext.globalAlpha=1;});
+document.getElementById("benutzeroberflaeche").innerHTML="Leben: "+spieler.leben+"<br>Punkte: "+punkte.score+"<br>XP: "+punkte.xp+"<br>Highscore: "+punkte.highscore;
+}
+function spielschleife(){aktualisieren();zeichnen();requestAnimationFrame(spielschleife);}
+spielschleife();
+</script>
+</body>
+</html>
