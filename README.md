@@ -7,4 +7,4 @@ It is the year 2084. The Steel Legion is attacking Earth! Only the Nova-I can sa
 
 
 
-![Alternativtext - Alternative Text](https://raybod8765.github.io/Spiel/bilder/GamePlayScreenshot.png)
+![Alternativtext - Alternative Text](https://raybod8765.github.io/game/bilder/GamePlayScreenshot.png)
